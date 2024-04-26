@@ -6,22 +6,29 @@ use GuzzleHttp\Exception\GuzzleException;
 function upAffiliateManagerImportJS(){
     ?>
         <script>
-        function ImportRun(i){
-            jQuery.get(ajaxurl+'?action=wc-up-affiliate-import-run&run='+i, function(result){
-                var n = parseInt(result, 10)
-                if (!isNaN(n)){
-                    setTimeout(function(){
-                        ImportRun(n)
-                        document.getElementById('import_process').innerHTML += ' .'
-                    }, 1000)
-                } else {
-                    document.getElementById('import_process').innerHTML = result
-                }
-            })
-        };
-        jQuery(document).ready(function(){
-            ImportRun(1)
-        })</script>
+            (function(){
+                function ImportRun(i){
+                    jQuery.ajax({
+                        url: ajaxurl+'?action=wc-up-affiliate-import-run&run='+i,
+                        success: function(result){
+                            var n = parseInt(result, 10)
+                            if (!isNaN(n)){
+                                setTimeout(function(){
+                                        ImportRun(n)
+                                        document.getElementById('import_process').innerHTML += ' .'
+                                }, 100)
+                            } else {
+                                document.getElementById('import_process').innerHTML = result
+                            }
+                        },
+                        timeout: 600000
+                    })
+                };
+                jQuery(document).ready(function(){
+                    ImportRun(1)
+                })
+            })()
+        </script>
     <?php
 }
 
@@ -79,22 +86,24 @@ function upAffiliateManagerImportProducts2($run = 0): string
 
     $import_part_file = sprintf('%s/part-%d.json', $import_dir, $run);
     $import_result_file = sprintf('%s/results.json', $import_dir);
-    $rawProducts = [];
-    $imported = [];
-    $updated = [];
-    $deleted = [];
+    $rawProducts = $imported = $updated = $deleted = [];
+
+    extract(upAffiliateManagerImportIncludeExcludeGroups($options)); //includeGroups[], excludeGroups[]
 
     if (file_exists($import_result_file)) {
         extract(json_decode(file_get_contents($import_result_file), true));
     }
 
     if (!file_exists($import_part_file)) {
+        if (!empty($includeGroups)) {
+            $deleted = upAffiliateManagerImportSetNotIncludedOutOfStock(array_diff(getProductIds(), $imported, $updated));
+        }
         upAffiliateManagerImportCleanup($import_dir);
         upAffiliateManagerUpdateOptions();
         return esc_html__('Product import complete', UP_AFFILIATE_MANAGER_PROJECT) . ': '
             . count($imported) . ' ' . esc_html__('imported') . ', '
             . count($updated) . ' ' . esc_html__('updated') . ', '
-            . count($deleted) . ' ' . esc_html__('out of stock');
+            . count($deleted) . ' ' . esc_html__('deleted');
     } else {
         $rawProducts = json_decode(file_get_contents($import_part_file), true);
     }
@@ -103,23 +112,13 @@ function upAffiliateManagerImportProducts2($run = 0): string
     foreach ($rawProducts as $n => $product) {
         $products[$product['group_id']][] = $product;
     }
-
-    $isIncludeGroups = false;
     foreach ($products as $group) {
-        if (isset($options['include_groups']) && $options['include_groups'] !== '') {
-            $isIncludeGroups = true;
-            $includeGroups = explode(',', $options['include_groups']);
-            if (!in_array($group[0]['group_id'], $includeGroups)) {
-                continue;
-            }
+        if (!empty($includeGroups) && !in_array($group[0]['group_id'], $includeGroups)) {
+            continue;
         }
-        if (isset($options['exclude_groups']) && $options['exclude_groups'] !== '') {
-            $excludeGroups = explode(',', $options['exclude_groups']);
-            if (in_array($group[0]['group_id'], $excludeGroups)) {
-                continue;
-            }
+        if (!empty($excludeGroups) && in_array($group[0]['group_id'], $excludeGroups)) {
+            continue;
         }
-
         $product = upAffiliateManagerGetProductBySku($group[0]['group_id']);
         if ($product) {
             $skus = [];
@@ -166,6 +165,7 @@ function upAffiliateManagerImportProducts2($run = 0): string
                     $productVariation->set_stock_status('outofstock');
                     $productVariation->save();
                 }
+
             }
             $updated[] = $productId;
         } else {
@@ -208,25 +208,7 @@ function upAffiliateManagerImportProducts2($run = 0): string
         }
     }
 
-    if (!$isIncludeGroups) {
-        $productsNotInStock = array_diff(getProductIds(), $imported, $updated);
-        foreach ($productsNotInStock as $productNotInStock) {
-            $product = wc_get_product($productNotInStock);
-            if ($product) {
-                $product->set_stock_status('outofstock');
-                $product->save();
-                $productVariations = $product->get_children();
-                foreach ($productVariations as $productVariationId) {
-                    $productVariation = wc_get_product($productVariationId);
-                    $productVariation->set_stock_status('outofstock');
-                    $productVariation->save();
-                }
-                $deleted[] = $product->get_id();
-            }
-        }
-    }
-
-    file_put_contents($import_result_file, json_encode(compact('imported', 'updated', 'deleted')));
+    file_put_contents($import_result_file, json_encode(compact('imported', 'updated')));
     unlink($import_part_file);
 
     return strval(++$run);
@@ -240,4 +222,34 @@ function upAffiliateManagerSettingsRegisterBatchSize()
     }
     echo "<input id = 'wc_up_affiliate_manager_setting_import_batch_size' name='wc_up_affiliate_manager_options[batch_size]' type = 'number' class='regular-text' value = '" . esc_attr($options['batch_size']) . "' />";
     echo "<p class='description' > If import fails - try smaller batch size </p > ";
+}
+
+function upAffiliateManagerImportSetNotIncludedOutOfStock($productsNotInStock)
+{
+    $deleted = [];
+    foreach ($productsNotInStock as $productNotInStock) {
+        $product = wc_get_product($productNotInStock);
+        if ($product) {
+            $product->set_stock_status('outofstock');
+            $deleted[] = $product->save();
+            foreach ($product->get_children() as $productVariationId) {
+                $productVariation = wc_get_product($productVariationId);
+                $productVariation->set_stock_status('outofstock');
+                $productVariation->save();
+            }
+        }
+    }
+    return $deleted;
+}
+
+function upAffiliateManagerImportIncludeExcludeGroups($options)
+{
+    $excludeGroups = $includeGroups = [];
+    if (isset($options['include_groups']) && $options['include_groups'] !== '') {
+        $includeGroups = explode(',', $options['include_groups']);
+    }
+    if (isset($options['exclude_groups']) && $options['exclude_groups'] !== '') {
+        $excludeGroups = explode(',', $options['exclude_groups']);
+    }
+    return compact('includeGroups', 'excludeGroups');
 }
