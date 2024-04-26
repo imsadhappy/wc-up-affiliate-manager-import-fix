@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce UP Affiliate Manager Import Fix
  * Plugin URI: https://gitlab.com/wp-dmd/wc-up-affiliate-manager
  * Description: Provides import fix of Affiliate functionality for WooCommerce.
- * Version: 1.0.1
+ * Version: 1.1.0
  * Author: Andrii Serb
  * Author URI: https://www.developtimization.com/imsadhappy
  * Requires at least: 5.5
