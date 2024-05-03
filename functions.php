@@ -127,7 +127,11 @@ function upAffiliateManagerImportProducts2($run = 0): string
             // update
             foreach ($group as $item) {
                 $skus[] = (string)$item['product_id'];
-                $productVariation = getProductVariationBySku($item['product_id']);
+                try {
+                    $productVariation = getProductVariationBySku($item['product_id']);
+                } catch (WC_Data_Exception $exception) {
+                    continue;
+                }
                 if ($productVariation) {
                     // update
                     updateProductVariation($productVariation, $item);
@@ -136,7 +140,7 @@ function upAffiliateManagerImportProducts2($run = 0): string
                     try {
                         addProductVariation($product, $item);
                     } catch (WC_Data_Exception $exception) {
-                        return $exception->getMessage();
+                        continue;
                     }
                 }
             }
@@ -160,12 +164,15 @@ function upAffiliateManagerImportProducts2($run = 0): string
             }
             $skusNotInStock = array_diff($skusOnShop, $skus);
             foreach ($skusNotInStock as $skuNotInStock) {
-                $productVariation = getProductVariationBySku($skuNotInStock);
+                try {
+                    $productVariation = getProductVariationBySku($skuNotInStock);
+                } catch (WC_Data_Exception $exception) {
+                    continue;
+                }
                 if ($productVariation) {
                     $productVariation->set_stock_status('outofstock');
                     $productVariation->save();
                 }
-
             }
             $updated[] = $productId;
         } else {

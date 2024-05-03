@@ -21,7 +21,7 @@ add_action('plugins_loaded', function () {
 
     require_once __DIR__ . '/functions.php';
 
-    add_action('admin_menu', function(){
+    add_action( 'admin_menu', function(){
         $menu_slug = plugin_basename( UP_AFFILIATE_MANAGER_PROJECT );
         $hookname = get_plugin_page_hookname( $menu_slug, '' );
         if (isset($_POST['import2']) && !empty($hookname)) {
@@ -34,7 +34,7 @@ add_action('plugins_loaded', function () {
                 );
             }, 9 );
         }
-    });
+    } );
 
     add_action( 'admin_init', function(){
         add_settings_field(
@@ -44,7 +44,7 @@ add_action('plugins_loaded', function () {
             UP_AFFILIATE_MANAGER_PAGE,
             'api_settings'
         );
-    }, 11);
+    }, 11 );
 
     add_filter( 'pre_update_option', function ( $value, $option, $old_value ) {
         if ($option == UP_AFFILIATE_MANAGER_OPTIONS) {
@@ -68,7 +68,7 @@ add_action('plugins_loaded', function () {
                 })(document.getElementById('import'))
             </script><?php
         }
-    });
+    } );
 
     add_action( 'wp_ajax_wc-up-affiliate-import-run', function () {
         $run = intval($_GET['run']);
