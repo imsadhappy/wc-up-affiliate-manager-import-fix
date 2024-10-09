@@ -79,4 +79,11 @@ add_action('plugins_loaded', function () {
         }
     } );
 
+    if (has_action('init', 'upAffiliateManagerInitAffCookie')) {
+        remove_action('init', 'upAffiliateManagerInitAffCookie');
+        if (!wp_doing_cron()) {
+            upAffiliateManagerInitAffCookie();
+        }
+    }
+
 }, 99);
